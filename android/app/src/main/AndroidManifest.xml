@@ -3,8 +3,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- برای دوربین در اندرویدهای قدیمی‌تر از Android 10 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
@@ -25,6 +32,7 @@
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
+            android:launchMode="singleTop"
             android:exported="true">
 
             <intent-filter>
@@ -37,9 +45,11 @@
             android:name=".AssistantVoiceInteractionService"
             android:permission="android.permission.BIND_VOICE_INTERACTION"
             android:exported="true">
+
             <intent-filter>
                 <action android:name="android.service.voice.VoiceInteractionService" />
             </intent-filter>
+
             <meta-data
                 android:name="android.voice_interaction"
                 android:resource="@xml/voice_interaction_service" />
@@ -49,17 +59,9 @@
             android:name=".AssistantSessionService"
             android:permission="android.permission.BIND_VOICE_INTERACTION"
             android:exported="true">
+
             <intent-filter>
                 <action android:name="android.service.voice.VoiceInteractionSessionService" />
-            </intent-filter>
-        </service>
-
-        <service
-            android:name=".AssistantRecognitionService"
-            android:permission="android.permission.BIND_SPEECH_RECOGNITION"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.speech.RecognitionService" />
             </intent-filter>
         </service>
 
