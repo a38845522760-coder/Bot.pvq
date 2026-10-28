@@ -1,10 +1,10 @@
-
 name: Build Android APK
 
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches:
+      - main
     paths:
       - "android/**"
       - "build.gradle.kts"
@@ -15,10 +15,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Build AI Bale
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout source
@@ -33,22 +38,63 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: platform-tools
-          accept-android-sdk-licenses: "yes"
-          log-accepted-android-sdk-licenses: "false"
+          packages: "platform-tools"
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
 
-      - name: Install Android platform
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+          cache-read-only: false
+
+      - name: Verify project files
+        run: |
+          test -f settings.gradle.kts
+          test -f build.gradle.kts
+          test -f gradle.properties
+          test -f android/app/build.gradle.kts
+          test -f android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/java/com/aibale/assistant/MainActivity.java
+          echo "Project files found."
 
       - name: Build debug APK
         env:
           HF_SPACE_URL: ${{ vars.HF_SPACE_URL }}
-        run: gradle --no-daemon assembleDebug -PHF_SPACE_URL="$HF_SPACE_URL"
+        run: |
+          if [ -z "$HF_SPACE_URL" ]; then
+            echo "::error::Repository variable HF_SPACE_URL is missing."
+            exit 1
+          fi
+
+          case "$HF_SPACE_URL" in
+            https://*) ;;
+            *)
+              echo "::error::HF_SPACE_URL must start with https://"
+              exit 1
+              ;;
+          esac
+
+          gradle --no-daemon --stacktrace \
+            assembleDebug \
+            -PHF_SPACE_URL="$HF_SPACE_URL"
+
+      - name: Verify APK
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -s "$APK" ]; then
+            echo "::error::APK was not created."
+            exit 1
+          fi
+
+          ls -lh "$APK"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
