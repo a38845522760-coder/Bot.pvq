@@ -1,16 +1,18 @@
+
 package com.aibale.assistant;
 
+import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
-import android.content.Intent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ServiceInfo;
-import android.os.Build;
-import android.os.IBinder;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
+import android.os.Build;
+import android.os.IBinder;
 
 public class ScreenCaptureService extends Service {
 
@@ -43,7 +45,8 @@ public class ScreenCaptureService extends Service {
             resultData = intent.getParcelableExtra("resultData");
         }
 
-        if (resultData == null || resultCode != RESULT_OK) {
+        if (resultData == null ||
+                resultCode != Activity.RESULT_OK) {
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -81,10 +84,14 @@ public class ScreenCaptureService extends Service {
                 return START_NOT_STICKY;
             }
 
-            // نقطهٔ اتصال برای افزودن ضبط واقعی صفحه.
-            // در این نسخه هنوز فریم تصویری دریافت یا ارسال نمی‌شود.
+            // این نسخه هنوز فریم‌های صفحه را دریافت یا به هوش مصنوعی ارسال نمی‌کند.
 
         } catch (SecurityException | IllegalStateException e) {
+            android.util.Log.e(
+                    "AI Bale",
+                    "Screen capture could not start",
+                    e
+            );
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -141,4 +148,4 @@ public class ScreenCaptureService extends Service {
     public IBinder onBind(Intent intent) {
         return null;
     }
-              }
+}
