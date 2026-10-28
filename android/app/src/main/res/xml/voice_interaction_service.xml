@@ -3,5 +3,4 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:sessionService="com.aibale.assistant.AssistantSessionService"
     android:recognitionService="com.aibale.assistant.AssistantRecognitionService"
-    android:supportsAssist="true"
-    android:supportsLaunchFromKeyguard="false" />
+    android:supportsAssist="true" />
