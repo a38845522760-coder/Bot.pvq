@@ -11,14 +11,10 @@ import android.webkit.SslErrorHandler;
 import android.net.http.SslError;
 import android.content.Intent;
 import android.net.Uri;
-import android.webkit.ValueCallback;
-import android.webkit.PermissionRequest;
 import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
-import android.webkit.WebView;
-import android.widget.Toast;
 
 public class MainActivity extends Activity {
+
     private WebView webView;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -36,31 +32,51 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(true);
 
         webView.setWebViewClient(new WebViewClient() {
+
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            public boolean shouldOverrideUrlLoading(
+                    WebView view,
+                    WebResourceRequest request
+            ) {
                 Uri uri = request.getUrl();
                 String host = uri.getHost();
 
-                if ("huggingface.co".equals(host) ||
-                    (host != null && host.endsWith(".hf.space")) ||
-                    "tapi.bale.ai".equals(host)) {
+                if (host != null &&
+                    (host.equals("huggingface.co") ||
+                     host.endsWith(".hf.space") ||
+                     host.equals("tapi.bale.ai"))) {
                     return false;
                 }
 
-                startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                    startActivity(intent);
+                } catch (Exception ignored) {
+                    // اگر مرورگر دیگری موجود نباشد، برنامه بسته نمی‌شود.
+                }
+
                 return true;
             }
 
             @Override
-            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+            public void onReceivedSslError(
+                    WebView view,
+                    SslErrorHandler handler,
+                    SslError error
+            ) {
                 handler.cancel();
             }
         });
 
         webView.setWebChromeClient(new WebChromeClient());
-        webView.loadUrl(BuildConfig.HF_SPACE_URL.isEmpty()
-            ? "https://huggingface.co"
-            : BuildConfig.HF_SPACE_URL);
+
+        String spaceUrl = BuildConfig.HF_SPACE_URL;
+
+        if (spaceUrl != null && !spaceUrl.trim().isEmpty()) {
+            webView.loadUrl(spaceUrl);
+        } else {
+            webView.loadUrl("https://huggingface.co");
+        }
     }
 
     @Override
