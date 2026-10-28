@@ -3,11 +3,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- برای دوربین در اندرویدهای قدیمی‌تر از Android 10 -->
+    <!-- Needed only on Android 9 and earlier when a camera app writes to shared storage. -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
@@ -34,22 +34,21 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:launchMode="singleTop"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
+        <!-- Android can select this service as the system's digital assistant. -->
         <service
             android:name=".AssistantVoiceInteractionService"
+            android:label="AI Bale"
             android:permission="android.permission.BIND_VOICE_INTERACTION"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.service.voice.VoiceInteractionService" />
             </intent-filter>
-
             <meta-data
                 android:name="android.voice_interaction"
                 android:resource="@xml/voice_interaction_service" />
@@ -57,9 +56,9 @@
 
         <service
             android:name=".AssistantSessionService"
+            android:label="AI Bale Assistant"
             android:permission="android.permission.BIND_VOICE_INTERACTION"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.service.voice.VoiceInteractionSessionService" />
             </intent-filter>
