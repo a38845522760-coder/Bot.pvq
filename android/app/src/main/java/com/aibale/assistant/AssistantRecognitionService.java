@@ -1,9 +1,9 @@
 package com.aibale.assistant;
 
 import android.content.Intent;
-import android.os.Bundle;
 import android.speech.RecognitionService;
 import android.speech.SpeechRecognizer;
+import android.os.RemoteException;
 
 public class AssistantRecognitionService extends RecognitionService {
 
@@ -12,16 +12,28 @@ public class AssistantRecognitionService extends RecognitionService {
             Intent recognizerIntent,
             Callback callback
     ) {
-        callback.error(SpeechRecognizer.ERROR_RECOGNIZER_BUSY);
+        sendError(callback, SpeechRecognizer.ERROR_RECOGNIZER_BUSY);
     }
 
     @Override
     protected void onStopListening(Callback callback) {
-        callback.error(SpeechRecognizer.ERROR_CLIENT);
+        sendError(callback, SpeechRecognizer.ERROR_CLIENT);
     }
 
     @Override
     protected void onCancel(Callback callback) {
-        callback.error(SpeechRecognizer.ERROR_CLIENT);
+        sendError(callback, SpeechRecognizer.ERROR_CLIENT);
+    }
+
+    private void sendError(Callback callback, int error) {
+        try {
+            callback.error(error);
+        } catch (RemoteException e) {
+            android.util.Log.e(
+                    "AI Bale",
+                    "Could not report speech recognition error",
+                    e
+            );
+        }
     }
 }
