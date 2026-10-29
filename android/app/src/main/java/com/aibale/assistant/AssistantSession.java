@@ -49,10 +49,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Compact Android assistant surface. It keeps the user in the current app,
- * sends requests to the existing Hugging Face Mini App API, and displays the
- * answer inside the system VoiceInteractionSession instead of opening the
- * full-screen MainActivity for every question.
+ * Compact Android assistant surface.
+ *
+ * It sends requests to the existing Hugging Face Mini App API and displays
+ * the response inside the system VoiceInteractionSession.
  */
 public class AssistantSession extends VoiceInteractionSession {
 
@@ -63,11 +63,13 @@ public class AssistantSession extends VoiceInteractionSession {
     private static final long JOB_TIMEOUT_MS = 4 * 60 * 1000L;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = new Thread(r, "ai-bale-assistant-api");
-        thread.setDaemon(true);
-        return thread;
-    });
+
+    private final ExecutorService networkExecutor =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread thread = new Thread(r, "ai-bale-assistant-api");
+                thread.setDaemon(true);
+                return thread;
+            });
 
     private EditText promptInput;
     private TextView statusView;
@@ -86,10 +88,14 @@ public class AssistantSession extends VoiceInteractionSession {
 
     public AssistantSession(Context context) {
         super(context);
+
         textToSpeech = new TextToSpeech(context, result -> {
             ttsReady = result == TextToSpeech.SUCCESS;
+
             if (ttsReady && textToSpeech != null) {
-                int languageResult = textToSpeech.setLanguage(new Locale("fa", "IR"));
+                int languageResult =
+                        textToSpeech.setLanguage(new Locale("fa", "IR"));
+
                 if (languageResult == TextToSpeech.LANG_MISSING_DATA
                         || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                     textToSpeech.setLanguage(new Locale("fa"));
@@ -106,11 +112,13 @@ public class AssistantSession extends VoiceInteractionSession {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(16), dp(14), dp(16), dp(12));
         root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setBackground(rounded(Color.rgb(250, 250, 253), dp(24), Color.rgb(225, 226, 234)));
+        root.setBackground(
+                rounded(Color.rgb(250, 250, 253), dp(24),
+                        Color.rgb(225, 226, 234)));
+
         root.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
+                ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView title = new TextView(context);
         title.setText("AI Bale");
@@ -125,6 +133,7 @@ public class AssistantSession extends VoiceInteractionSession {
         subtitle.setTextSize(12);
         subtitle.setTextColor(Color.rgb(105, 108, 120));
         subtitle.setGravity(Gravity.CENTER);
+
         LinearLayout.LayoutParams subtitleParams = matchWrap();
         subtitleParams.topMargin = dp(2);
         subtitleParams.bottomMargin = dp(10);
@@ -140,8 +149,10 @@ public class AssistantSession extends VoiceInteractionSession {
         promptInput.setPadding(dp(12), dp(10), dp(12), dp(10));
         promptInput.setTextColor(Color.rgb(30, 32, 42));
         promptInput.setHintTextColor(Color.rgb(125, 128, 140));
-        promptInput.setBackground(rounded(Color.WHITE, dp(14), Color.rgb(225, 226, 234)));
+        promptInput.setBackground(
+                rounded(Color.WHITE, dp(14), Color.rgb(225, 226, 234)));
         promptInput.setImeOptions(EditorInfo.IME_ACTION_SEND);
+
         LinearLayout.LayoutParams inputParams = matchWrap();
         inputParams.bottomMargin = dp(8);
         root.addView(promptInput, inputParams);
@@ -152,6 +163,7 @@ public class AssistantSession extends VoiceInteractionSession {
 
         micButton = actionButton("🎙 میکروفن", false);
         sendButton = actionButton("ارسال", true);
+
         actionRow.addView(micButton, weightedButtonParams());
         actionRow.addView(sendButton, weightedButtonParams());
         root.addView(actionRow, matchWrap());
@@ -167,7 +179,9 @@ public class AssistantSession extends VoiceInteractionSession {
 
         answerScroll = new ScrollView(context);
         answerScroll.setFillViewport(false);
-        answerScroll.setBackground(rounded(Color.WHITE, dp(14), Color.rgb(230, 231, 237)));
+        answerScroll.setBackground(
+                rounded(Color.WHITE, dp(14), Color.rgb(230, 231, 237)));
+
         answerView = new TextView(context);
         answerView.setText("پاسخ دستیار اینجا نمایش داده می‌شود.");
         answerView.setTextSize(14);
@@ -175,13 +189,16 @@ public class AssistantSession extends VoiceInteractionSession {
         answerView.setGravity(Gravity.RIGHT);
         answerView.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
         answerView.setPadding(dp(12), dp(10), dp(12), dp(10));
+
         answerScroll.addView(answerView, new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-        LinearLayout.LayoutParams answerParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(150)
-        );
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout.LayoutParams answerParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        dp(150));
+
         answerParams.topMargin = dp(2);
         root.addView(answerScroll, answerParams);
 
@@ -192,9 +209,11 @@ public class AssistantSession extends VoiceInteractionSession {
         speakButton = actionButton("🔊 شنیدن پاسخ", false);
         Button roleButton = actionButton("تنظیم دستیار", false);
         Button openButton = actionButton("برنامه کامل", false);
+
         utilityRow.addView(speakButton, weightedSmallButtonParams());
         utilityRow.addView(roleButton, weightedSmallButtonParams());
         utilityRow.addView(openButton, weightedSmallButtonParams());
+
         LinearLayout.LayoutParams utilityParams = matchWrap();
         utilityParams.topMargin = dp(8);
         root.addView(utilityRow, utilityParams);
@@ -202,10 +221,12 @@ public class AssistantSession extends VoiceInteractionSession {
         Button closeButton = new Button(context);
         closeButton.setText("بستن");
         closeButton.setTextSize(12);
-        LinearLayout.LayoutParams closeParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                dp(38)
-        );
+
+        LinearLayout.LayoutParams closeParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        dp(38));
+
         closeParams.topMargin = dp(3);
         root.addView(closeButton, closeParams);
 
@@ -220,10 +241,12 @@ public class AssistantSession extends VoiceInteractionSession {
             boolean enterPressed = event != null
                     && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
                     && event.getAction() == KeyEvent.ACTION_DOWN;
+
             if (actionId == EditorInfo.IME_ACTION_SEND || enterPressed) {
                 sendTypedQuery();
                 return true;
             }
+
             return false;
         });
 
@@ -233,6 +256,7 @@ public class AssistantSession extends VoiceInteractionSession {
     @Override
     public void onShow(Bundle args, int showFlags) {
         super.onShow(args, showFlags);
+
         if (statusView != null && !busy) {
             statusView.setText("آماده‌ام؛ سؤال را بفرست.");
         }
@@ -247,31 +271,37 @@ public class AssistantSession extends VoiceInteractionSession {
     @Override
     public void onDestroy() {
         stopSpeechRecognition();
+
         if (textToSpeech != null) {
             textToSpeech.stop();
             textToSpeech.shutdown();
             textToSpeech = null;
         }
+
         networkExecutor.shutdownNow();
         super.onDestroy();
     }
 
     private void sendTypedQuery() {
         if (promptInput == null) return;
+
         String query = promptInput.getText().toString().trim();
         sendQuery(query, false);
     }
 
     private void sendQuery(String query, boolean speakWhenFinished) {
         query = query == null ? "" : query.trim();
+
         if (query.isEmpty()) {
             setStatus("اول یک سؤال بنویس یا با میکروفن بگو.");
             return;
         }
+
         if (query.length() > 4000) {
             setStatus("پیام خیلی طولانی است؛ آن را کوتاه‌تر کن.");
             return;
         }
+
         if (busy) {
             setStatus("درخواست قبلی هنوز در حال پردازش است.");
             return;
@@ -280,25 +310,41 @@ public class AssistantSession extends VoiceInteractionSession {
         final String submittedQuery = query;
         shouldSpeakCurrentAnswer = speakWhenFinished;
         busy = true;
+
         updateBusyUi(true);
+
         if (promptInput != null) promptInput.setText("");
         if (answerView != null) answerView.setText("");
+
         setStatus("در حال اتصال به دستیار…");
 
         networkExecutor.execute(() -> {
             try {
                 String answer = askExistingMiniApp(submittedQuery);
+
                 mainHandler.post(() -> {
                     lastAnswer = answer;
-                    if (answerView != null) answerView.setText(answer);
-                    if (answerScroll != null) answerScroll.post(() -> answerScroll.fullScroll(View.FOCUS_UP));
+
+                    if (answerView != null) {
+                        answerView.setText(answer);
+                    }
+
+                    if (answerScroll != null) {
+                        answerScroll.post(
+                                () -> answerScroll.fullScroll(View.FOCUS_UP));
+                    }
+
                     setStatus("پاسخ آماده شد.");
                     busy = false;
                     updateBusyUi(false);
-                    if (shouldSpeakCurrentAnswer) speakAnswer(answer);
+
+                    if (shouldSpeakCurrentAnswer) {
+                        speakAnswer(answer);
+                    }
                 });
             } catch (Exception error) {
                 String message = friendlyError(error);
+
                 mainHandler.post(() -> {
                     busy = false;
                     updateBusyUi(false);
@@ -309,40 +355,53 @@ public class AssistantSession extends VoiceInteractionSession {
     }
 
     private String askExistingMiniApp(String query) throws Exception {
-        JSONObject bootstrap = apiRequest("GET", "/api/bootstrap", null, 25000);
+        JSONObject bootstrap = apiRequest(
+                "GET", "/api/bootstrap", null, 25000);
+
         JSONObject chat = findTextChat(bootstrap);
 
         if (chat == null || chat.optString("id", "").trim().isEmpty()) {
             JSONObject newChatPayload = new JSONObject()
                     .put("type", "text")
                     .put("title", "گفت‌وگوی دستیار AI Bale");
-            JSONObject created = apiRequest("POST", "/api/chats", newChatPayload, 25000);
+
+            JSONObject created = apiRequest(
+                    "POST", "/api/chats", newChatPayload, 25000);
+
             chat = created.optJSONObject("chat");
         }
 
         if (chat == null) {
-            throw new IOException("سرور نتوانست گفت‌وگوی دستیار را ایجاد یا بازیابی کند.");
+            throw new IOException(
+                    "سرور نتوانست گفت‌وگوی دستیار را ایجاد یا بازیابی کند.");
         }
 
         String chatId = chat.optString("id", "").trim();
+
         if (chatId.isEmpty()) {
             throw new IOException("شناسهٔ گفت‌وگو از سرور دریافت نشد.");
         }
 
         JSONObject messagePayload = new JSONObject()
-                .put("request_id", "assistant_" + UUID.randomUUID().toString().replace("-", ""))
+                .put("request_id",
+                        "assistant_" + UUID.randomUUID()
+                                .toString().replace("-", ""))
                 .put("text", query);
 
         JSONObject submitted = apiRequest(
                 "POST",
                 "/api/chats/" + encodePathSegment(chatId) + "/messages",
                 messagePayload,
-                30000
-        );
+                30000);
+
         JSONObject submittedJob = submitted.optJSONObject("job");
-        String jobId = submittedJob == null ? "" : submittedJob.optString("id", "").trim();
+        String jobId = submittedJob == null
+                ? ""
+                : submittedJob.optString("id", "").trim();
+
         if (jobId.isEmpty()) {
-            throw new IOException("درخواست ثبت شد، اما شناسهٔ پردازش دریافت نشد.");
+            throw new IOException(
+                    "درخواست ثبت شد، اما شناسهٔ پردازش دریافت نشد.");
         }
 
         long deadline = System.currentTimeMillis() + JOB_TIMEOUT_MS;
@@ -351,46 +410,71 @@ public class AssistantSession extends VoiceInteractionSession {
         while (System.currentTimeMillis() < deadline) {
             JSONObject pollResponse = apiRequest(
                     "GET",
-                    "/api/jobs/" + encodePathSegment(jobId) + "?partial_from=0&partial_revision=0",
+                    "/api/jobs/" + encodePathSegment(jobId)
+                            + "?partial_from=0&partial_revision=0",
                     null,
-                    25000
-            );
+                    25000);
+
             JSONObject job = pollResponse.optJSONObject("job");
+
             if (job == null) {
-                throw new IOException("پاسخ وضعیت پردازش از سرور معتبر نبود.");
+                throw new IOException(
+                        "پاسخ وضعیت پردازش از سرور معتبر نبود.");
             }
 
-            String state = job.optString("status", "").toLowerCase(Locale.ROOT);
+            String state = job.optString("status", "")
+                    .toLowerCase(Locale.ROOT);
+
             String serverMessage = job.optString("message", "").trim();
-            if (!serverMessage.isEmpty() && !serverMessage.equals(lastStatus)) {
+
+            if (!serverMessage.isEmpty()
+                    && !serverMessage.equals(lastStatus)) {
                 lastStatus = serverMessage;
-                final String visibleStatus = serverMessage.length() > 110
-                        ? serverMessage.substring(0, 110) : serverMessage;
+
+                final String visibleStatus =
+                        serverMessage.length() > 110
+                                ? serverMessage.substring(0, 110)
+                                : serverMessage;
+
                 mainHandler.post(() -> setStatus(visibleStatus));
             }
 
             if ("done".equals(state)) {
                 JSONObject completedChat = job.optJSONObject("chat");
                 String answer = extractLastAssistantAnswer(completedChat);
+
                 if (answer.isEmpty()) {
                     JSONObject refreshed = apiRequest(
-                            "GET", "/api/chats/" + encodePathSegment(chatId), null, 25000
-                    );
-                    answer = extractLastAssistantAnswer(refreshed.optJSONObject("chat"));
+                            "GET",
+                            "/api/chats/" + encodePathSegment(chatId),
+                            null,
+                            25000);
+
+                    answer = extractLastAssistantAnswer(
+                            refreshed.optJSONObject("chat"));
                 }
+
                 if (answer.isEmpty()) {
                     answer = job.optString("partial_text", "").trim();
                 }
+
                 if (answer.isEmpty()) {
-                    throw new IOException("پردازش تمام شد، اما متن پاسخ از سرور دریافت نشد.");
+                    throw new IOException(
+                            "پردازش تمام شد، اما متن پاسخ از سرور دریافت نشد.");
                 }
+
                 return answer;
             }
 
             if ("error".equals(state)) {
                 String error = job.optString("error", "").trim();
-                throw new IOException(error.isEmpty() ? "پردازش سؤال ناموفق بود." : error);
+
+                throw new IOException(
+                        error.isEmpty()
+                                ? "پردازش سؤال ناموفق بود."
+                                : error);
             }
+
             if ("cancelled".equals(state)) {
                 throw new IOException("پردازش توسط سرور متوقف شد.");
             }
@@ -398,49 +482,77 @@ public class AssistantSession extends VoiceInteractionSession {
             Thread.sleep(850L);
         }
 
-        throw new SocketTimeoutException("پاسخ بیش از زمان مجاز طول کشید. دوباره تلاش کن.");
+        throw new SocketTimeoutException(
+                "پاسخ بیش از زمان مجاز طول کشید. دوباره تلاش کن.");
     }
 
     private JSONObject findTextChat(JSONObject bootstrap) {
         JSONObject current = bootstrap.optJSONObject("current");
-        if (current != null && "text".equalsIgnoreCase(current.optString("type", "text"))) {
+
+        if (current != null
+                && "text".equalsIgnoreCase(
+                        current.optString("type", "text"))) {
             return current;
         }
+
         JSONArray chats = bootstrap.optJSONArray("chats");
+
         if (chats != null) {
             for (int i = 0; i < chats.length(); i++) {
                 JSONObject chat = chats.optJSONObject(i);
-                if (chat != null && "text".equalsIgnoreCase(chat.optString("type", "text"))) {
+
+                if (chat != null
+                        && "text".equalsIgnoreCase(
+                                chat.optString("type", "text"))) {
                     return chat;
                 }
             }
         }
+
         return null;
     }
 
     private String extractLastAssistantAnswer(JSONObject chat) {
         if (chat == null) return "";
+
         JSONArray messages = chat.optJSONArray("messages");
+
         if (messages == null) return "";
+
         for (int i = messages.length() - 1; i >= 0; i--) {
             JSONObject message = messages.optJSONObject(i);
+
             if (message == null) continue;
+
             String role = message.optString("role", "");
-            if ("ai".equalsIgnoreCase(role) || "assistant".equalsIgnoreCase(role)) {
+
+            if ("ai".equalsIgnoreCase(role)
+                    || "assistant".equalsIgnoreCase(role)) {
                 String text = message.optString("text", "").trim();
+
                 if (!text.isEmpty()) return text;
             }
         }
+
         return "";
     }
 
-    private JSONObject apiRequest(String method, String path, JSONObject body, int readTimeoutMs) throws Exception {
+    private JSONObject apiRequest(
+            String method,
+            String path,
+            JSONObject body,
+            int readTimeoutMs
+    ) throws Exception {
         URL url = new URL(baseUrl() + path);
+
         if (!"https".equalsIgnoreCase(url.getProtocol())) {
-            throw new IOException("اتصال امن به سرور پیکربندی نشده است.");
+            throw new IOException(
+                    "اتصال امن به سرور پیکربندی نشده است.");
         }
 
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        HttpURLConnection connection =
+                (HttpURLConnection) url.openConnection();
+
         connection.setRequestMethod(method);
         connection.setConnectTimeout(12000);
         connection.setReadTimeout(readTimeoutMs);
@@ -448,39 +560,25 @@ public class AssistantSession extends VoiceInteractionSession {
         connection.setUseCaches(false);
         connection.setRequestProperty("Accept", "application/json");
         connection.setRequestProperty("Cache-Control", "no-store");
-        connection.setRequestProperty("X-Mini-App-Client-ID", getOrCreateClientId());
+        connection.setRequestProperty(
+                "X-Mini-App-Client-ID", getOrCreateClientId());
 
         try {
             if (body != null) {
-                byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+                byte[] bytes = body.toString()
+                        .getBytes(StandardCharsets.UTF_8);
+
                 connection.setDoOutput(true);
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setRequestProperty(
+                        "Content-Type", "application/json; charset=utf-8");
                 connection.setFixedLengthStreamingMode(bytes.length);
+
                 try (OutputStream output = connection.getOutputStream()) {
                     output.write(bytes);
                 }
             }
 
             int status = connection.getResponseCode();
-            InputStream stream = (status >= 200 && status < 300)
-                    ? connection.getInputStream() : connection.getErrorStream();
-            String responseText = readBounded(stream, MAX_API_RESPONSE_BYTES);
 
-            JSONObject response;
-            try {
-                Object parsed = new JSONTokener(responseText).nextValue();
-                response = parsed instanceof JSONObject ? (JSONObject) parsed : new JSONObject();
-            } catch (Exception invalidJson) {
-                response = new JSONObject();
-            }
-
-            if (status < 200 || status >= 300 || !response.optBoolean("ok", true)) {
-                String serverError = response.optString("error", "").trim();
-                if (status == 401 || status == 403) {
-                    throw new IOException("سرور دسترسی مستقل دستیار را نپذیرفت. تنظیم احراز هویت Mini App در Space را بررسی کن.");
-                }
-                if (status == 429) {
-                    throw new IOException("تعداد درخواست‌ها زیاد شده؛ کمی صبر کن و دوباره تلاش کن.");
-                }
-                if (status >= 500) {
-                    throw new IOException("سرور هوش مصنوعی موقتاً خطا داد (" + status + "). 
+            InputStream stream =
+                    (status >= 2
