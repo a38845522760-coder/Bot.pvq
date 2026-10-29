@@ -577,6 +577,8 @@ public class MainActivity extends Activity {
                         cameraImageUri));
 
                         Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                cameraIntent.addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
                         | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
         try {
