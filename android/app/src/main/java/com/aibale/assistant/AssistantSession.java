@@ -578,9 +578,8 @@ public class AssistantSession extends VoiceInteractionSession {
                 }
             }
 
-            int status = connection.getResponseCode();
-
-                                200 && status < 300)
+                        InputStream stream =
+                    (status >= 200 && status < 300)
                             ? connection.getInputStream()
                             : connection.getErrorStream();
 
