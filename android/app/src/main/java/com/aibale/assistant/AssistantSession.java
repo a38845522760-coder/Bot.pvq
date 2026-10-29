@@ -580,5 +580,443 @@ public class AssistantSession extends VoiceInteractionSession {
 
             int status = connection.getResponseCode();
 
-            InputStream stream =
-                    (status >= 2
+                                200 && status < 300)
+                            ? connection.getInputStream()
+                            : connection.getErrorStream();
+
+            String responseText =
+                    readBounded(stream, MAX_API_RESPONSE_BYTES);
+
+            JSONObject response;
+
+            try {
+                Object parsed = new JSONTokener(responseText).nextValue();
+                response = parsed instanceof JSONObject
+                        ? (JSONObject) parsed
+                        : new JSONObject();
+            } catch (Exception e) {
+                response = new JSONObject();
+            }
+
+            if (status < 200 || status >= 300
+                    || !response.optBoolean("ok", true)) {
+                String serverError =
+                        response.optString("error", "").trim();
+
+                if (status == 401 || status == 403) {
+                    throw new IOException(
+                            "سرور دسترسی دستیار را نپذیرفت.");
+                }
+
+                if (status == 429) {
+                    throw new IOException(
+                            "درخواست‌ها زیاد شده‌اند؛ کمی صبر کن.");
+                }
+
+                if (status >= 500) {
+                    throw new IOException(
+                            "سرور هوش مصنوعی خطا داد (" + status + ").");
+                }
+
+                throw new IOException(
+                        serverError.isEmpty()
+                                ? "درخواست ناموفق بود (" + status + ")."
+                                : serverError);
+            }
+
+            return response;
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private String baseUrl() throws Exception {
+        String configured = BuildConfig.HF_SPACE_URL == null
+                ? ""
+                : BuildConfig.HF_SPACE_URL.trim();
+
+        while (configured.endsWith("/")) {
+            configured = configured.substring(
+                    0, configured.length() - 1);
+        }
+
+        if (configured.isEmpty()) {
+            configured =
+                    "https://mohamad1039-bot-gemini.hf.space";
+        }
+
+        URL url = new URL(configured);
+
+        if (!"https".equalsIgnoreCase(url.getProtocol())
+                || url.getHost() == null) {
+            throw new IOException("نشانی HTTPS معتبر نیست.");
+        }
+
+        return configured;
+    }
+
+    private String getOrCreateClientId() {
+        SharedPreferences preferences =
+                getContext().getSharedPreferences(
+                        PREFS_NAME, Context.MODE_PRIVATE);
+
+        String existing =
+                preferences.getString(CLIENT_ID_KEY, "");
+
+        if (isValidClientId(existing)) return existing;
+
+        String generated = "c" + UUID.randomUUID()
+                .toString().replace("-", "")
+                .toLowerCase(Locale.ROOT);
+
+        preferences.edit()
+                .putString(CLIENT_ID_KEY, generated)
+                .putString(CLIENT_ID_SOURCE_KEY, "assistant")
+                .apply();
+
+        return generated;
+    }
+
+    private boolean isValidClientId(String value) {
+        return value != null
+                && (value.matches("c[a-fA-F0-9]{32}")
+                || value.matches("[a-fA-F0-9]{32}"));
+    }
+
+    private String encodePathSegment(String value) throws Exception {
+        return URLEncoder.encode(value, "UTF-8")
+                .replace("+", "%20");
+    }
+
+    private String readBounded(InputStream stream, int limit)
+            throws IOException {
+        if (stream == null) return "";
+
+        try (InputStream input = stream;
+             ByteArrayOutputStream output =
+                     new ByteArrayOutputStream()) {
+
+            byte[] buffer = new byte[8192];
+            int total = 0;
+            int count;
+
+            while ((count = input.read(buffer)) != -1) {
+                total += count;
+
+                if (total > limit) {
+                    throw new IOException(
+                            "پاسخ سرور بیش از حد مجاز است.");
+                }
+
+                output.write(buffer, 0, count);
+            }
+
+            return output.toString(StandardCharsets.UTF_8.name());
+        }
+    }
+
+    private String friendlyError(Exception error) {
+        String message = error == null
+                ? ""
+                : String.valueOf(error.getMessage());
+
+        if (message.trim().isEmpty()) {
+            return "ارتباط با دستیار برقرار نشد.";
+        }
+
+        if (error instanceof SocketTimeoutException
+                || message.toLowerCase(Locale.ROOT).contains("timeout")) {
+            return "پاسخ سرور طول کشید؛ دوباره تلاش کن.";
+        }
+
+        return message.length() > 240
+                ? message.substring(0, 240)
+                : message;
+    }
+
+    private void startSpeechRecognition() {
+        if (busy) {
+            setStatus("درخواست قبلی هنوز در حال پردازش است.");
+            return;
+        }
+
+        if (getContext().checkSelfPermission(
+                Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            setStatus("برای استفاده از میکروفن، مجوز لازم است.");
+            openMainActivityForMicPermission();
+            return;
+        }
+
+        if (!SpeechRecognizer.isRecognitionAvailable(getContext())) {
+            setStatus("سرویس تشخیص گفتار در دسترس نیست.");
+            return;
+        }
+
+        try {
+            if (speechRecognizer == null) {
+                speechRecognizer =
+                        SpeechRecognizer.createSpeechRecognizer(getContext());
+
+                speechRecognizer.setRecognitionListener(
+                        new RecognitionListener() {
+                    @Override
+                    public void onReadyForSpeech(Bundle params) {
+                        setStatus("گوش می‌دهم…");
+                    }
+
+                    @Override
+                    public void onBeginningOfSpeech() {
+                        setStatus("در حال شنیدن…");
+                    }
+
+                    @Override
+                    public void onRmsChanged(float value) { }
+
+                    @Override
+                    public void onBufferReceived(byte[] buffer) { }
+
+                    @Override
+                    public void onEndOfSpeech() {
+                        setStatus("در حال تبدیل گفتار به متن…");
+                    }
+
+                    @Override
+                    public void onError(int error) {
+                        setStatus(speechErrorMessage(error));
+                    }
+
+                    @Override
+                    public void onResults(Bundle results) {
+                        String text = firstRecognitionResult(results);
+
+                        if (text.isEmpty()) {
+                            setStatus("گفتاری تشخیص داده نشد.");
+                        } else {
+                            if (promptInput != null) {
+                                promptInput.setText(text);
+                            }
+                            sendQuery(text, true);
+                        }
+                    }
+
+                    @Override
+                    public void onPartialResults(Bundle results) {
+                        String text = firstRecognitionResult(results);
+                        if (!text.isEmpty()) {
+                            setStatus("شنیده‌شده: " + text);
+                        }
+                    }
+
+                    @Override
+                    public void onEvent(int eventType, Bundle params) { }
+                });
+            }
+
+            Intent intent = new Intent(
+                    RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+
+            speechRecognizer.startListening(intent);
+        } catch (Exception e) {
+            setStatus("شروع تشخیص گفتار ناموفق بود.");
+        }
+    }
+
+    private String firstRecognitionResult(Bundle bundle) {
+        if (bundle == null) return "";
+
+        java.util.ArrayList<String> results =
+                bundle.getStringArrayList(
+                        SpeechRecognizer.RESULTS_RECOGNITION);
+
+        return results == null || results.isEmpty()
+                || results.get(0) == null
+                ? ""
+                : results.get(0).trim();
+    }
+
+    private String speechErrorMessage(int error) {
+        switch (error) {
+            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                return "مجوز میکروفن داده نشده است.";
+            case SpeechRecognizer.ERROR_NETWORK:
+            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                return "خطای شبکه در تشخیص گفتار.";
+            case SpeechRecognizer.ERROR_NO_MATCH:
+            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                return "گفتاری تشخیص داده نشد؛ دوباره تلاش کن.";
+            default:
+                return "تشخیص گفتار ناموفق بود.";
+        }
+    }
+
+    private void stopSpeechRecognition() {
+        if (speechRecognizer != null) {
+            try {
+                speechRecognizer.cancel();
+                speechRecognizer.destroy();
+            } catch (Exception ignored) {
+            }
+            speechRecognizer = null;
+        }
+    }
+
+    private void speakAnswer(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            setStatus("پاسخی برای پخش وجود ندارد.");
+            return;
+        }
+
+        if (textToSpeech == null || !ttsReady) {
+            setStatus("موتور گفتار هنوز آماده نیست.");
+            return;
+        }
+
+        String spoken = text.length() > 3500
+                ? text.substring(0, 3500)
+                : text;
+
+        textToSpeech.speak(
+                spoken,
+                TextToSpeech.QUEUE_FLUSH,
+                null,
+                "ai_bale_answer");
+    }
+
+    private void requestAssistantRole() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                RoleManager roleManager =
+                        getContext().getSystemService(RoleManager.class);
+
+                if (roleManager != null
+                        && roleManager.isRoleAvailable(
+                                RoleManager.ROLE_ASSISTANT)) {
+                    Intent intent = roleManager.createRequestRoleIntent(
+                            RoleManager.ROLE_ASSISTANT);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(intent);
+                    return;
+                }
+            }
+
+            Intent intent =
+                    new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        } catch (Exception e) {
+            setStatus("تنظیم دستیار از تنظیمات اندروید انجام می‌شود.");
+        }
+    }
+
+    private void openMainActivity() {
+        Intent intent = new Intent(getContext(), MainActivity.class);
+        intent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        getContext().startActivity(intent);
+        finish();
+    }
+
+    private void openMainActivityForMicPermission() {
+        Intent intent = new Intent(getContext(), MainActivity.class);
+        intent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        intent.putExtra(
+                MainActivity.EXTRA_REQUEST_AUDIO_PERMISSION, true);
+        getContext().startActivity(intent);
+    }
+
+    private void setStatus(String value) {
+        mainHandler.post(() -> {
+            if (statusView != null) {
+                statusView.setText(value == null ? "" : value);
+            }
+        });
+    }
+
+    private void updateBusyUi(boolean isBusy) {
+        mainHandler.post(() -> {
+            if (sendButton != null) {
+                sendButton.setEnabled(!isBusy);
+                sendButton.setText(
+                        isBusy ? "در حال پاسخ…" : "ارسال");
+            }
+
+            if (micButton != null) {
+                micButton.setEnabled(!isBusy);
+            }
+
+            if (speakButton != null) {
+                speakButton.setEnabled(!lastAnswer.isEmpty() && !isBusy);
+            }
+        });
+    }
+
+    private Button actionButton(String text, boolean primary) {
+        Button button = new Button(getContext());
+        button.setText(text);
+        button.setTextSize(12);
+        button.setAllCaps(false);
+        button.setMinHeight(dp(42));
+        button.setPadding(dp(4), dp(2), dp(4), dp(2));
+        button.setTextColor(primary
+                ? Color.WHITE
+                : Color.rgb(40, 44, 60));
+        button.setBackground(
+                rounded(
+                        primary ? Color.rgb(68, 91, 220)
+                                : Color.rgb(239, 240, 246),
+                        dp(12),
+                        primary ? Color.rgb(68, 91, 220)
+                                : Color.rgb(225, 226, 234)));
+        return button;
+    }
+
+    private LinearLayout.LayoutParams matchWrap() {
+        return new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+    }
+
+    private LinearLayout.LayoutParams weightedButtonParams() {
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(0, dp(44), 1f);
+        params.leftMargin = dp(3);
+        params.rightMargin = dp(3);
+        return params;
+    }
+
+    private LinearLayout.LayoutParams weightedSmallButtonParams() {
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(0, dp(38), 1f);
+        params.leftMargin = dp(2);
+        params.rightMargin = dp(2);
+        return params;
+    }
+
+    private GradientDrawable rounded(
+            int fillColor, int radius, int strokeColor) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(fillColor);
+        drawable.setCornerRadius(radius);
+        drawable.setStroke(dp(1), strokeColor);
+        return drawable;
+    }
+
+    private int dp(float value) {
+        return Math.round(
+                value * getContext().getResources()
+                        .getDisplayMetrics().density);
+    }
+                    }
