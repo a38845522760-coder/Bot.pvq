@@ -576,10 +576,9 @@ public class MainActivity extends Activity {
                         "AI Bale camera image",
                         cameraImageUri));
 
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION
                                 cameraIntent.addFlags(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+             | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
         try {
             startActivityForResult(cameraIntent, REQUEST_CAMERA);
