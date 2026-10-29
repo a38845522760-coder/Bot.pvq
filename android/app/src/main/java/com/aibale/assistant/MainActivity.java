@@ -576,5 +576,265 @@ public class MainActivity extends Activity {
                         "AI Bale camera image",
                         cameraImageUri));
 
-        cameraIntent.addFlags(
-                In
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+
+        try {
+            startActivityForResult(cameraIntent, REQUEST_CAMERA);
+        } catch (ActivityNotFoundException e) {
+            deleteCameraImage();
+            showToast("بازکردن دوربین ممکن نشد.");
+            finishFileSelection(null);
+        }
+    }
+
+    private void publishCameraImage() {
+        if (cameraImageUri == null
+                || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return;
+        }
+
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.IS_PENDING, 0);
+        getContentResolver().update(cameraImageUri, values, null, null);
+    }
+
+    private void deleteCameraImage() {
+        if (cameraImageUri == null) return;
+
+        try {
+            getContentResolver().delete(cameraImageUri, null, null);
+        } catch (Exception ignored) {
+        }
+
+        cameraImageUri = null;
+    }
+
+    private void startPendingSpeechInputIfReady() {
+        if (!pageLoaded || !pendingStartVoiceInput) return;
+
+        pendingStartVoiceInput = false;
+        requestSpeechInput();
+    }
+
+    private void requestAudioSetupPermissionIfNeeded() {
+        if (!pageLoaded || !pendingAudioSetupPermission) return;
+
+        pendingAudioSetupPermission = false;
+
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{Manifest.permission.RECORD_AUDIO},
+                    REQUEST_AUDIO_SETUP_PERMISSION);
+        } else {
+            showToast("مجوز میکروفن قبلاً فعال است.");
+        }
+    }
+
+    private void requestSpeechInput() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{Manifest.permission.RECORD_AUDIO},
+                    REQUEST_SPEECH_PERMISSION);
+            return;
+        }
+
+        Intent intent = new Intent(
+                RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+
+        try {
+            startActivityForResult(intent, REQUEST_SPEECH_INPUT);
+        } catch (ActivityNotFoundException e) {
+            showToast("سرویس تشخیص گفتار در دسترس نیست.");
+        }
+    }
+
+    private void injectPendingAssistantQuery() {
+        if (!pageLoaded || webView == null
+                || pendingAssistantQuery == null) {
+            return;
+        }
+
+        String query = pendingAssistantQuery;
+        pendingAssistantQuery = null;
+
+        String script =
+                "(function(){" +
+                "var t=" + JSONObject.quote(query) + ";" +
+                "var e=document.querySelector('#inp')||" +
+                "document.querySelector('textarea')||" +
+                "document.querySelector('[contenteditable=true]');" +
+                "if(!e)return false;" +
+                "e.focus();" +
+                "if(e.isContentEditable)e.textContent=t;else e.value=t;" +
+                "e.dispatchEvent(new Event('input',{bubbles:true}));" +
+                "e.dispatchEvent(new Event('change',{bubbles:true}));" +
+                "setTimeout(function(){" +
+                "var b=document.querySelector('[data-act=send]');" +
+                "if(b&&!b.disabled)b.click();" +
+                "},150);" +
+                "return true;" +
+                "})()";
+
+        webView.evaluateJavascript(script, null);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode,
+            String[] permissions,
+            int[] grantResults) {
+        super.onRequestPermissionsResult(
+                requestCode, permissions, grantResults);
+
+        if (requestCode == REQUEST_WEB_PERMISSIONS) {
+            resolvePendingWebPermission();
+        } else if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            if (checkSelfPermission(Manifest.permission.CAMERA)
+                    == PackageManager.PERMISSION_GRANTED) {
+                launchCameraIntent();
+            } else {
+                finishFileSelection(null);
+                showToast("مجوز دوربین داده نشد.");
+            }
+        } else if (requestCode == REQUEST_SPEECH_PERMISSION) {
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                    == PackageManager.PERMISSION_GRANTED) {
+                requestSpeechInput();
+            }
+        } else if (requestCode == REQUEST_AUDIO_SETUP_PERMISSION) {
+            showToast(
+                    checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                            == PackageManager.PERMISSION_GRANTED
+                            ? "مجوز میکروفن فعال شد."
+                            : "مجوز میکروفن داده نشد.");
+        }
+    }
+
+    private void resolvePendingWebPermission() {
+        PermissionRequest request = pendingWebPermission;
+        pendingWebPermission = null;
+
+        if (request == null) return;
+
+        boolean granted = true;
+
+        for (String resource : request.getResources()) {
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
+                granted &= checkSelfPermission(
+                        Manifest.permission.RECORD_AUDIO)
+                        == PackageManager.PERMISSION_GRANTED;
+            } else if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
+                granted &= checkSelfPermission(
+                        Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED;
+            } else {
+                granted = false;
+            }
+        }
+
+        if (granted) {
+            request.grant(request.getResources());
+        } else {
+            request.deny();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(
+            int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == REQUEST_FILE) {
+            Uri[] result = null;
+
+            if (resultCode == RESULT_OK) {
+                try {
+                    result = WebChromeClient.FileChooserParams.parseResult(
+                            resultCode, data);
+                } catch (Exception ignored) {
+                }
+
+                if ((result == null || result.length == 0)
+                        && data != null && data.getData() != null) {
+                    result = new Uri[]{data.getData()};
+                }
+            }
+
+            finishFileSelection(result);
+            return;
+        }
+
+        if (requestCode == REQUEST_CAMERA) {
+            if (resultCode == RESULT_OK && cameraImageUri != null) {
+                Uri result = cameraImageUri;
+                publishCameraImage();
+                cameraImageUri = null;
+                finishFileSelection(new Uri[]{result});
+            } else {
+                deleteCameraImage();
+                finishFileSelection(null);
+            }
+            return;
+        }
+
+        if (requestCode == REQUEST_SPEECH_INPUT
+                && resultCode == RESULT_OK && data != null) {
+            ArrayList<String> results = data.getStringArrayListExtra(
+                    RecognizerIntent.EXTRA_RESULTS);
+
+            if (results != null && !results.isEmpty()) {
+                pendingAssistantQuery = results.get(0);
+                injectPendingAssistantQuery();
+            }
+        }
+    }
+
+    private void finishFileSelection(Uri[] result) {
+        if (fileCallback != null) {
+            fileCallback.onReceiveValue(result);
+            fileCallback = null;
+        }
+    }
+
+    private void showToast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (fileCallback != null) {
+            fileCallback.onReceiveValue(null);
+            fileCallback = null;
+        }
+
+        if (pendingWebPermission != null) {
+            pendingWebPermission.deny();
+            pendingWebPermission = null;
+        }
+
+        if (webView != null) {
+            webView.stopLoading();
+            webView.destroy();
+            webView = null;
+        }
+
+        super.onDestroy();
+    }
+}
